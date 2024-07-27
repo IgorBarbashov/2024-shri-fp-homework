@@ -14,38 +14,85 @@
  * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
  * Ответ будет приходить в поле {result}
  */
- import Api from '../tools/api';
 
- const api = new Api();
+import {
+    __,
+    allPass,
+    length,
+    lt,
+    gt,
+    test,
+    pipe,
+    tap,
+    ifElse,
+    partial,
+    partialRight,
+    modulo,
+    assoc,
+    andThen,
+    prop,
+    concat,
+    toString,
+    otherwise
+} from 'ramda';
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+import Api from '../tools/api';
+const api = new Api();
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const isValid = allPass([
+    pipe(length, lt(__, 10)),
+    pipe(length, gt(__, 2)),
+    pipe(parseFloat, gt(__, 0)),
+    test(/^[0-9]*\.?[0-9]+$/)
+]);
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const getRoundedNumber = pipe(Number, Math.round);
+const getSquarePower = partialRight(Math.pow, [2]);
+const getMod3 = modulo(__, 3);
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+const getResult = pipe(prop('result'), String);
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+const getBinaryApi = api.get('https://api.tech/numbers/base');
+const buildGetBinaryProp = assoc('number', __, {from: 10, to: 2});
+const getBinary = pipe(buildGetBinaryProp, getBinaryApi);
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+const getAnimal = pipe(toString, concat('https://animals.tech/'), api.get(__, {}));
+
+const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
+    const log = tap(writeLog);
+    const onValidationError = partial(handleError, ['ValidationError']);
+    const processAnimalApiPromise = pipe(getResult, handleSuccess);
+    const processBinaryApiPromise = pipe(
+        getResult,
+        log,
+        length,
+        log,
+        getSquarePower,
+        log,
+        getMod3,
+        log,
+        getAnimal,
+        andThen(processAnimalApiPromise)
+    );
+
+    const onValidationSuccess = pipe(
+        getRoundedNumber,
+        log,
+        getBinary,
+        andThen(processBinaryApiPromise),
+        otherwise(handleError)
+    );
+
+    const run = pipe(
+        log,
+        ifElse(
+            isValid,
+            onValidationSuccess,
+            onValidationError
+        )
+    );
+
+    run(value);
+}
 
 export default processSequence;
